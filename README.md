@@ -17,9 +17,13 @@ cobol-modernization-prompts/
 ├── 00_orchestrator.md                 ← START HERE: Master process that drives everything
 ├── 01_discovery_inventory.md          ← Pass 1: Inventory, dependencies, data dictionary
 ├── 02_business_specifications.md      ← Pass 2: Business processes, rules, workflows
+├── 02b_product_stories.md             ← Pass 2B: PM-readable user stories (GATE for PM approval)
 ├── 03_functional_specifications.md    ← Pass 3: Functional specs, API contracts, interfaces
 ├── 04_technical_specifications.md     ← Pass 4: Tech specs, Gherkin tests, migration maps
-└── 05_governance_crosscutting.md      ← Pass 5: Traceability, risks, executive summary
+├── 05_security_access_control.md      ← Pass 5: Security, authorization, data classification
+├── 06_data_quality_migration.md       ← Pass 6: Data quality profiling, migration plan
+├── 07_operations_transition.md        ← Pass 7: Ops runbook, transition plan, cutover
+└── 08_governance_crosscutting.md      ← Pass 8: Traceability, risks, executive summary
 ```
 
 ## How It Works
@@ -34,7 +38,7 @@ The orchestrator is the entry point. It:
 5. **Creates the output directory structure** — organized for both human and machine consumption
 6. **Drives each pass** — referencing the individual phase files
 
-### The Five Passes
+### The Eight Passes
 
 Each pass has its own markdown file containing detailed prompts with:
 - **Role definition** — what perspective the LLM should take
@@ -46,9 +50,13 @@ Each pass has its own markdown file containing detailed prompts with:
 |------|------|-----------------|
 | 1 | `01_discovery_inventory.md` | Inventory entries, dependency graphs, data dictionaries, domain model schemas (JSON Schema) |
 | 2 | `02_business_specifications.md` | Business process narratives, workflow state machines (YAML), business rules with test cases (YAML DSL) |
+| **2B** | **`02b_product_stories.md`** | **PM-readable user stories with Given-When-Then acceptance criteria, PM review worksheets, story map. THIS IS THE PM GATE — nothing proceeds without PM approval.** |
 | 3 | `03_functional_specifications.md` | Functional specs, API contracts (OpenAPI 3.1), interface specs, event specs (AsyncAPI) |
 | 4 | `04_technical_specifications.md` | Technical specs with Java pseudocode, Gherkin test features, data migration mappings |
-| 5 | `05_governance_crosscutting.md` | Traceability matrix, risk register, executive summary, completion report |
+| 5 | `05_security_access_control.md` | Security patterns, authorization rules, data classification, mainframe security team interview questions |
+| 6 | `06_data_quality_migration.md` | Data quality risk profiles, validation SQL scripts, comprehensive migration plan with rollback |
+| 7 | `07_operations_transition.md` | Operations runbook, ops team interview template, transition/cutover plan, SLA & monitoring spec |
+| 8 | `08_governance_crosscutting.md` | Traceability matrix, risk register, executive summary, completion report |
 
 ### Dual-Format Output
 
@@ -71,6 +79,9 @@ modernization-output/
 │   └── specs/
 │       ├── workflows/      ← State machine YAMLs
 │       └── rules/          ← Business rules with test cases
+├── 02b_product_stories/
+│   ├── prose/              ← PM-readable user stories, review worksheets, story map
+│   └── specs/              ← Machine-readable backlog YAMLs
 ├── 03_functional/
 │   ├── prose/              ← Functional specifications
 │   └── specs/
@@ -82,8 +93,18 @@ modernization-output/
 │   └── specs/
 │       ├── features/       ← Gherkin/Cucumber test features
 │       └── migration/      ← Data migration mapping YAMLs
-├── 05_governance/
-│   ├── prose/              ← Executive summary, risk narrative, traceability report
+├── 05_security/
+│   ├── prose/              ← Security specs, data classification narrative
+│   └── specs/              ← Security YAMLs, data classification YAML
+├── 06_data_quality/
+│   ├── prose/              ← Data quality report, migration plan
+│   ├── specs/              ← Data quality profiles, migration plan YAML
+│   └── scripts/            ← Validation SQL scripts for DBA to run
+├── 07_operations/
+│   ├── prose/              ← Ops runbook, interview template, transition plan
+│   └── specs/              ← Operations YAML, transition plan YAML
+├── 08_governance/
+│   ├── prose/              ← Executive summary, risk narrative, traceability
 │   └── specs/              ← Traceability matrix YAML, risk register YAML
 ├── logs/
 │   └── processing_log.yaml ← Progress tracking (supports resume)

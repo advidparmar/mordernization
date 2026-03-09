@@ -229,6 +229,9 @@ TASKS:
     │   └── specs/
     │       ├── workflows/
     │       └── rules/
+    ├── 02b_product_stories/
+    │   ├── prose/
+    │   └── specs/
     ├── 03_functional/
     │   ├── prose/
     │   └── specs/
@@ -240,7 +243,17 @@ TASKS:
     │   └── specs/
     │       ├── features/
     │       └── migration/
-    ├── 05_governance/
+    ├── 05_security/
+    │   ├── prose/
+    │   └── specs/
+    ├── 06_data_quality/
+    │   ├── prose/
+    │   ├── specs/
+    │   └── scripts/
+    ├── 07_operations/
+    │   ├── prose/
+    │   └── specs/
+    ├── 08_governance/
     │   ├── prose/
     │   └── specs/
     └── logs/
@@ -276,7 +289,22 @@ TASKS:
         programs_completed: []
         programs_remaining: []
       
-      pass_5_governance:
+      pass_5_security:
+        status: "NOT_STARTED"
+        domains_completed: []
+        domains_remaining: []
+      
+      pass_6_data_quality:
+        status: "NOT_STARTED"
+        entities_completed: []
+        entities_remaining: []
+      
+      pass_7_operations:
+        status: "NOT_STARTED"
+        interview_template_generated: false
+        transition_plan_generated: false
+      
+      pass_8_governance:
         status: "NOT_STARTED"
     ```
 
@@ -336,19 +364,54 @@ QUALITY GATE after Pass 2:
 - SME review flag: list rules needing validation
 
 ====================================================================
+STEP 2B: PASS 2B — PRODUCT STORIES & ACCEPTANCE CRITERIA
+====================================================================
+
+Follow the instructions in: 02b_product_stories.md
+
+This is the PRODUCT MANAGER GATE. Nothing proceeds to functional 
+or technical specs without PM review and approval of these stories.
+
+1. For each domain cluster, generate user stories with Given-When-Then 
+   acceptance criteria in plain business English
+2. Generate PM review worksheets and story map
+3. Write outputs to: {{OUTPUT_DIR}}/02b_product_stories/
+4. **STOP AND WAIT FOR PM REVIEW**
+
+PMs mark each story as:
+- KEEP AS-IS → Proceeds to Pass 3 unchanged
+- MODIFY → Proceeds to Pass 3 with PM's changes incorporated
+- ELIMINATE → Skipped in Pass 3 (no functional spec generated)
+- ENHANCE → Proceeds to Pass 3 with new requirements added
+
+QUALITY GATE after Pass 2B:
+- Every business process has corresponding user stories
+- Every business rule is referenced by at least one story
+- Stories are in plain English (no technical jargon)
+- PM review worksheets are generated
+- Story map shows end-to-end user journeys
+- **PM MUST REVIEW AND MARK UP STORIES BEFORE PROCEEDING**
+
+====================================================================
 STEP 3: PASS 3 — FUNCTIONAL SPECIFICATIONS
 ====================================================================
 
 Follow the instructions in: 03_functional_specifications.md
 
-Process programs by domain, including Pass 1 and Pass 2 outputs as 
-context.
+Process ONLY stories that PMs marked as KEEP, MODIFY, or ENHANCE.
+Skip stories marked ELIMINATE.
+Incorporate PM notes from MODIFY and ENHANCE stories.
 
-1. For each program/module, read source + copybooks
-2. Include inventory, business process docs, and rules as context
-3. Apply the prompts from 03_functional_specifications.md
-4. Write outputs to: {{OUTPUT_DIR}}/03_functional/
-5. Include UI mapping for CICS programs, report specs for batch
+Process programs by domain, including Pass 1, Pass 2, and Pass 2B 
+outputs as context.
+
+1. For each program/module (where stories are approved), read source + copybooks
+2. Include inventory, business process docs, rules, AND PM-approved stories as context
+3. For MODIFY stories, incorporate PM's change notes into the functional spec
+4. For ENHANCE stories, add the new requirements alongside existing functionality
+5. Apply the prompts from 03_functional_specifications.md
+6. Write outputs to: {{OUTPUT_DIR}}/03_functional/
+7. Include UI mapping for CICS programs, report specs for batch
 
 QUALITY GATE after Pass 3:
 - Every program has a functional spec
@@ -378,23 +441,86 @@ QUALITY GATE after Pass 4:
 - Precision warnings are explicit for all financial fields
 
 ====================================================================
-STEP 5: PASS 5 — GOVERNANCE & CROSS-CUTTING
+STEP 5: PASS 5 — SECURITY & ACCESS CONTROL
 ====================================================================
 
-Follow the instructions in: 05_governance_crosscutting.md
+Follow the instructions in: 05_security_access_control.md
 
-This pass aggregates across ALL prior outputs.
+Analyze security patterns in the code and flag what must be gathered 
+from the mainframe security team.
 
-1. Collect all business rules, specs, and open items
-2. Apply the governance prompts from 05_governance_crosscutting.md
-3. Write outputs to: {{OUTPUT_DIR}}/05_governance/
-4. Generate final traceability matrix and risk register
+1. Scan for security-related files in the repo (CSD, RACF, GRANT scripts)
+2. For each domain, extract authentication, authorization, and data 
+   protection patterns from the COBOL source
+3. Classify all data fields by sensitivity
+4. Write outputs to: {{OUTPUT_DIR}}/05_security/
+5. Generate the operations interview questions for security gaps
 
 QUALITY GATE after Pass 5:
+- Every API endpoint has an authorization rule
+- All PII/PCI/PHI fields are classified
+- Gaps requiring mainframe security team input are listed
+
+====================================================================
+STEP 6: PASS 6 — DATA QUALITY & MIGRATION READINESS
+====================================================================
+
+Follow the instructions in: 06_data_quality_migration.md
+
+Go beyond structure to analyze actual data quality risks and produce 
+the definitive migration plan.
+
+1. For each entity, analyze COBOL data definitions for quality risks
+2. Generate validation SQL scripts for the DBA to run against production
+3. Define migration sequence respecting referential integrity
+4. Produce the comprehensive migration plan with rollback procedures
+5. Write outputs to: {{OUTPUT_DIR}}/06_data_quality/
+
+QUALITY GATE after Pass 6:
+- Every entity has a data quality risk assessment
+- Validation scripts are generated
+- Migration sequence is defined
+- Financial reconciliation checks have zero tolerance
+- Rollback plan exists for every stage
+
+====================================================================
+STEP 7: PASS 7 — OPERATIONS & TRANSITION PLANNING
+====================================================================
+
+Follow the instructions in: 07_operations_transition.md
+
+Capture operational knowledge and design the production cutover.
+
+1. Infer operational characteristics from JCL and code patterns
+2. Generate the operations team interview template
+3. Design the transition plan (parallel run, canary, cutover sequence)
+4. Define SLAs and monitoring for the Java system
+5. Write outputs to: {{OUTPUT_DIR}}/07_operations/
+
+QUALITY GATE after Pass 7:
+- Operations interview template is complete and specific
+- Transition plan has rollback for every phase
+- Parallel run criteria defined
+- Service cutover sequence aligns with service decomposition
+
+====================================================================
+STEP 8: PASS 8 — GOVERNANCE & CROSS-CUTTING
+====================================================================
+
+Follow the instructions in: 08_governance_crosscutting.md
+
+This pass aggregates across ALL prior outputs (Passes 1-7).
+
+1. Collect all business rules, specs, open items, and risks from all passes
+2. Apply the governance prompts from 08_governance_crosscutting.md
+3. Write outputs to: {{OUTPUT_DIR}}/08_governance/
+4. Generate final traceability matrix, risk register, and executive summary
+
+QUALITY GATE after Pass 8:
 - Traceability matrix shows >95% coverage
 - All risks have severity, owner, and recommended action
 - Executive summary is coherent
-- Processing log shows all programs completed
+- Processing log shows all programs completed through all passes
 
 ====================================================================
 FINAL: COMPLETION REPORT
