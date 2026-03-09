@@ -2,13 +2,94 @@
 
 ## Purpose
 
-Create platform-independent functional specifications detailed enough for a Java development team to implement from, without ever seeing the COBOL source. Also produce machine-readable API contracts (OpenAPI), interface specs, and event specs.
+Create platform-independent functional specifications for Java developers. These must describe WHAT the system does algorithmically — without COBOL flavoring in the prose, and with pseudocode written in modern programming concepts.
+
+**CRITICAL:** The functional spec has TWO audiences with different needs:
+1. **Human-readable prose** — for dev leads reviewing scope and approach. Must use business language for the "what" and clean pseudocode for the "how."
+2. **Machine-readable OpenAPI** — for code generators and contract testing. This CAN reference COBOL source in x- extension fields.
+
+## The Functional Spec Language Standard
+
+### Processing Logic: Modern Pseudocode, Not COBOL Translation
+
+The biggest failure mode in functional specs is writing pseudocode that mirrors COBOL structure. COBOL processes sequentially with PERFORMs, GO TOs, and paragraph fall-throughs. Java developers think in objects, methods, streams, and exception handling.
+
+**BAD (COBOL-flavored pseudocode):**
+```
+OPEN INPUT LOAN-FILE
+READ LOAN-FILE INTO WS-LOAN-RECORD
+PERFORM UNTIL EOF
+  IF WS-ACCT-STATUS = 'A'
+    PERFORM 3000-CALC-INTEREST
+  END-IF
+  IF WS-ERROR-FLAG = 'Y'
+    PERFORM 9000-ERROR-RTN
+  END-IF
+  WRITE OUTPUT-RECORD FROM WS-LOAN-RECORD
+  READ LOAN-FILE INTO WS-LOAN-RECORD
+END-PERFORM
+CLOSE LOAN-FILE
+```
+
+**GOOD (modern pseudocode):**
+```
+function calculateDailyInterest(processingDate):
+    accounts = accountRepository.findAllActive()
+    results = new ProcessingResults()
+    
+    for each account in accounts:
+        try:
+            if not account.isEligibleForInterest():
+                results.skip(account, "Not eligible")
+                continue
+            
+            dailyInterest = interestCalculator.calculate(
+                balance = account.currentBalance,
+                annualRate = account.interestRate,
+                convention = DayCount.THIRTY_360
+            )
+            
+            account.addAccruedInterest(dailyInterest)
+            accountRepository.save(account)
+            results.recordSuccess(account, dailyInterest)
+            
+        catch ValidationException as e:
+            results.recordError(account, e.message)
+    
+    return results.toSummary()
+```
+
+### Key Differences in Pseudocode Style
+
+| COBOL Pattern | Write It As |
+|---|---|
+| PERFORM paragraph | Call a method with a descriptive name |
+| READ file / WRITE file | Repository.find() / Repository.save() |
+| Working storage flags (WS-ERROR-FLAG) | Exceptions or result objects |
+| EVALUATE / WHEN | switch/case or strategy pattern |
+| Nested IF with GO TO | Early return or guard clauses |
+| Sequential file processing | Stream/iterator with for-each |
+| COPY copybook | Reference the domain model class |
+| REDEFINES | Polymorphism or type discriminator |
+| 88-level conditions | Enum values or boolean methods |
+| RETURN-CODE 0/4/8 | Return result object with status enum |
+| ON SIZE ERROR | Try/catch ArithmeticException or validation |
+
+### Banned Terms in Prose (Same as Pass 2)
+
+All COBOL terms from the Pass 2 banned list apply here too. Additionally:
+- NEVER describe processing as "the program reads record X then writes record Y" — describe the business operation
+- NEVER use COBOL paragraph names as section headers — use business action names
+- Field names in the spec should be the DOMAIN MODEL names (camelCase Java style) from Pass 1 schemas, not COBOL field names
+
+---
 
 ## Inputs Required
 
 - COBOL source + copybooks (from repo)
-- Pass 1: inventory entries, domain models, dependency graph
-- Pass 2: business process docs, workflow YAMLs, rules YAMLs
+- Pass 1: inventory, domain models
+- Pass 2: business processes, rules
+- Pass 2B: PM-approved stories (**only build specs for KEEP/MODIFY/ENHANCE stories**)
 
 ## Outputs Produced
 
@@ -18,21 +99,17 @@ Create platform-independent functional specifications detailed enough for a Java
 | UI Mapping | `03_functional/prose/{transaction}_ui_mapping.md` | (embedded in OpenAPI) |
 | Report Spec | `03_functional/prose/{report}_report_spec.md` | — |
 | Interface Spec | `03_functional/prose/{interface}_interface_spec.md` | `03_functional/specs/interfaces/{name}.interface.yaml` |
-| Event Spec | — | `03_functional/specs/events/{domain}-events.asyncapi.yaml` |
 
 ## Processing Instructions
 
 ```
-1. For each program (by domain, in processing order):
-   a. READ program source + copybooks from repo
-   b. LOAD Pass 1 inventory and domain model as context
-   c. LOAD Pass 2 business process and rules as context
-   d. APPLY Prompt 3.1 (Functional Spec + API Contract)
-   e. If CICS online: APPLY Prompt 3.2 (UI Mapping)
-   f. If generates reports: APPLY Prompt 3.3 (Report Spec)
-   g. If external interfaces: APPLY Prompt 3.4 (Interface Spec)
-   h. WRITE outputs
-   i. UPDATE processing log
+1. CHECK Pass 2B PM decisions: only process stories marked KEEP, MODIFY, or ENHANCE
+2. For each approved story/module:
+   a. READ program source + copybooks
+   b. LOAD all prior outputs as context
+   c. APPLY Prompt 3.1
+   d. WRITE outputs
+3. UPDATE processing log
 ```
 
 ---
@@ -40,22 +117,42 @@ Create platform-independent functional specifications detailed enough for a Java
 ## Prompt 3.1 — Functional Specification & API Contract
 
 ```
-ROLE: You are BOTH a senior systems analyst (writing for Java developers 
-who've NEVER seen COBOL) AND an API architect (producing OpenAPI 3.1 specs).
+ROLE: You are a senior systems analyst writing specifications for a 
+Java team. You think in terms of services, APIs, domain objects, and 
+modern architecture patterns. When you describe processing logic, you 
+write pseudocode that a Java developer would naturally implement — 
+using methods, objects, repositories, exception handling, and streams.
+
+You translate COBOL's procedural, sequential, file-oriented processing 
+into equivalent logic expressed through modern patterns. You NEVER 
+write pseudocode that looks like COBOL with different syntax.
+
+CRITICAL RULES:
+1. Processing logic uses MODERN pseudocode (methods, objects, try/catch,
+   streams) — NOT COBOL-flavored (PERFORM, READ, WRITE, paragraph names)
+2. Field names use domain model names from Pass 1 schemas (camelCase),
+   NOT COBOL field names (WS-ACCT-NUM)
+3. Prose describes business operations, not file I/O operations
+4. Error handling uses exceptions and result objects, not return codes
+5. Data access uses repository/service patterns, not file open/read/close
+6. Conditional logic uses guard clauses and early returns, not nested IFs
+7. Collections use streams and filters, not sequential READ loops
+8. The spec must be implementable by a Java developer who has never 
+   seen COBOL and doesn't know what a copybook is
 
 CONTEXT:
 - System: {{SYSTEM_NAME}}
 - Domain: {{DOMAIN_CONTEXT}}
 
-PRIOR CONTEXT (read these files):
+PRIOR CONTEXT:
 - Inventory: {{OUTPUT_DIR}}/01_discovery/specs/inventory/{{PROGRAM_NAME}}.inventory.yaml
-- Domain Model: {{OUTPUT_DIR}}/01_discovery/specs/domain-model/{{ENTITY}}.schema.yaml
+- Domain Model: {{OUTPUT_DIR}}/01_discovery/specs/domain-model/*.schema.yaml
 - Business Process: {{OUTPUT_DIR}}/02_business/prose/{{CLUSTER}}_business_process.md
 - Business Rules: {{OUTPUT_DIR}}/02_business/specs/rules/{{DOMAIN}}/{{CLUSTER}}.rules.yaml
-- Workflow: {{OUTPUT_DIR}}/02_business/specs/workflows/{{PROCESS}}.workflow.yaml
+- PM-Approved Stories: {{OUTPUT_DIR}}/02b_product_stories/specs/{{DOMAIN}}_backlog.yaml
 
-TASK: Read the program from the repository and produce a dual-format 
-functional specification.
+TASK: Read the program from the repository. Produce a functional 
+specification that a Java developer can implement from.
 
 Program: {{REPO_ROOT}}/{{PROGRAM_PATH}}
 Copybooks: {{COPYBOOK_PATHS}}
@@ -64,79 +161,178 @@ Copybooks: {{COPYBOOK_PATHS}}
 
 FILE 1: {{OUTPUT_DIR}}/03_functional/prose/{{PROGRAM_NAME}}_functional_spec.md
 
-## Functional Specification: [Module/Function Name]
-**Spec ID:** FS-{{SPEC_ID}}  |  **Source:** {{PROGRAM_NAME}}  |  **Status:** Draft
+## Functional Specification: [Business Function Name — NOT COBOL program name]
+**Spec ID:** FS-{{SPEC_ID}}  |  **Stories:** [PM-approved story IDs]  |  **Status:** Draft
 
-### 1. Purpose
-[2-3 sentences. What does this function do? A Java developer must understand 
-the full scope without seeing COBOL.]
+### 1. What This Service Does
+[2-3 sentences describing the business capability. Written for a Java 
+developer who needs to understand the business context, not the COBOL 
+implementation.]
 
-### 2. Trigger
-[What initiates this function — user action, schedule, event, upstream process]
+### 2. When It Runs
+[Trigger: user action, API call, scheduled job, upstream event. 
+Describe in business terms.]
 
-### 3. Inputs
-**[Input Name]** — from [source]
-| Field | Type | Size/Precision | Required | Validation Rules | Description |
+### 3. What It Receives (Inputs)
+
+**[Input Name]** — from [business source, not "file" or "CICS screen"]
+
+| Field | Business Meaning | Type | Required | Constraints | Example |
 |---|---|---|---|---|---|
-| [field] | [String/BigDecimal/LocalDate/etc.] | [details] | [Y/N] | [BR-xxx refs] | [meaning] |
+| accountId | Unique loan account identifier | String, 10 chars | Yes | Alphanumeric only | "LN00045821" |
+| currentBalance | Outstanding loan amount | Decimal, 2 places | Yes | Must be >= 0 | 50000.00 |
+| interestRate | Annual interest rate | Decimal, 6 places | Yes | 0-100% range | 0.055000 |
 
-### 4. Outputs
-**[Output Name]** — to [destination]
-| Field | Type | Size/Precision | Derivation | Description |
+[Use domain model field names from Pass 1 schemas. Include realistic 
+example values. Describe constraints in business terms.]
+
+### 4. What It Produces (Outputs)
+
+**[Output Name]** — delivered to [business destination]
+
+| Field | Business Meaning | Type | How It's Determined | Example |
 |---|---|---|---|---|
-| [field] | [type] | [details] | [how calculated/derived] | [meaning] |
+| dailyInterest | Interest charged for today | Decimal, 2 places | Balance × (Rate ÷ 360) | 7.64 |
+| newAccruedTotal | Running interest total | Decimal, 2 places | Previous total + today's interest | 107.64 |
 
-### 5. Processing Logic
-Describe completely in structured English. Numbered steps. No COBOL terms.
+### 5. How It Works (Processing Logic)
 
-**5.1 [Block Name]** (Source: paragraph [name], rules: BR-xxx)
-1. [Step in clear English]
-   - If [condition]: [action]
-   - Else: [alternative]
-2. [Next step]
+[Write in modern pseudocode. Organize by BUSINESS OPERATION, not by 
+COBOL paragraph. Use domain model field names.]
 
-**5.2 [Next Block]**
-[Continue for all processing blocks...]
+**5.1 Validate the Request**
 
-### 6. Validation Rules (Detail)
-| Rule ID | Field(s) | Condition | Error Response | Error Code | HTTP Status |
+```pseudocode
+function validateAccount(account: LoanAccount): ValidationResult
+    // Policy BR-V-001: Account must exist and be identifiable
+    if account is null:
+        return ValidationResult.error("ACCOUNT_NOT_FOUND", 
+            "No account found with the provided identifier")
+    
+    // Policy BR-V-003: Account must be in processable status
+    if account.status not in [ACTIVE, DORMANT]:
+        return ValidationResult.error("INVALID_STATUS",
+            "Account status {account.status} is not eligible for this operation")
+    
+    return ValidationResult.success()
+```
+
+**5.2 Calculate Daily Interest**
+
+```pseudocode
+function calculateDailyInterest(account: LoanAccount): Money
+    // Policy BR-C-001: Daily interest using 30/360 convention
+    // Formula: Balance × (Annual Rate ÷ 360)
+    // IMPORTANT: Must use exact decimal arithmetic (BigDecimal), 
+    //   never floating-point. Round to 2 decimal places using HALF_UP.
+    //   The 360-day divisor is an industry convention, not a bug.
+    
+    dailyRate = account.interestRate / 360    // precision: 10 decimal places
+    dailyInterest = account.currentBalance × dailyRate
+    
+    return dailyInterest.roundTo(2, HALF_UP)
+    
+    // Example walkthrough:
+    // Balance: $50,000.00, Rate: 5.5% (0.055000)
+    // Daily rate: 0.055000 / 360 = 0.0001527778
+    // Daily interest: 50000.00 × 0.0001527778 = 7.638889
+    // Rounded: $7.64
+```
+
+**5.3 Apply Interest and Update Account**
+
+```pseudocode
+function applyInterest(account: LoanAccount, interest: Money): InterestResult
+    // Policy BR-E-001: Only active accounts accrue interest
+    if account.status != ACTIVE:
+        return InterestResult.skipped(account, "Not active")
+    
+    // Policy BR-C-001: Accrued interest is cumulative
+    account.accruedInterest += interest
+    account.lastInterestDate = today()
+    
+    accountRepository.save(account)
+    
+    return InterestResult.success(account, interest)
+```
+
+**5.4 Handle Errors and Generate Summary**
+
+```pseudocode
+function processAllAccounts(): ProcessingSummary
+    accounts = accountRepository.findAllActiveAccounts()
+    summary = new ProcessingSummary()
+    
+    for each account in accounts:
+        try:
+            validation = validateAccount(account)
+            if validation.failed():
+                summary.addSkipped(account, validation.reason)
+                continue
+            
+            interest = calculateDailyInterest(account)
+            result = applyInterest(account, interest)
+            summary.addSuccess(result)
+            
+        catch (exception):
+            // Individual account failures don't stop processing
+            summary.addError(account, exception.message)
+            log.error("Failed to process account {}", account.id, exception)
+    
+    // Policy: Process completes even if some accounts fail
+    // Warning if error rate > 5%, failure if > 20%
+    summary.determineOverallStatus()
+    return summary
+```
+
+### 6. Validation Rules
+
+| Policy | What's Checked | If It Fails | HTTP Status | Error Code |
+|---|---|---|---|---|
+| BR-V-001 | Account exists | "Account not found" response | 404 | ACCOUNT_NOT_FOUND |
+| BR-V-003 | Account status is processable | "Invalid status" response | 422 | INVALID_STATUS |
+
+### 7. Business Calculations
+
+| Policy | Formula | Example | Precision | Rounding | Day Count |
 |---|---|---|---|---|---|
-| BR-V-xxx | [fields] | [exact condition] | [message] | [ERR-xxx] | [4xx] |
+| BR-C-001 | Balance × (Rate ÷ 360) | $50K × (5.5% ÷ 360) = $7.64 | 2 decimal places | HALF_UP | 30/360 |
 
-### 7. Calculations (Detail)
-| Calc ID | Formula | Worked Example | Precision | Rounding | COBOL Source |
-|---|---|---|---|---|---|
-| BR-C-xxx | [formula] | [example with real numbers] | [decimal places] | [mode] | [program, paragraph] |
+⚠️ **Precision is critical.** These calculations involve money. Using 
+floating-point (float/double) WILL produce different results than the 
+legacy system. All monetary arithmetic MUST use exact decimal types 
+(BigDecimal in Java, Decimal in databases).
 
-### 8. State Management
-| Current State | Event/Condition | New State | Side Effects |
+### 8. How Errors Are Handled
+
+| What Goes Wrong | What the User Sees | What Happens Internally | Severity |
 |---|---|---|---|
-| [state] | [trigger] | [new state] | [what else happens] |
+| Account not found | "Account not found" message | Return 404 response | Normal — expected for invalid IDs |
+| Database unavailable | "Service temporarily unavailable" | Retry 3 times, then return 503 | Critical — alert operations |
+| Calculation overflow | N/A (batch) — account flagged | Skip account, add to error list | Warning — manual review needed |
+| No eligible accounts | Summary shows zero processed | Complete normally, no alert | Normal — expected on holidays |
 
-### 9. Error Handling
-| Condition | Detection | Response | Recovery | Notification |
+### 9. Connections to Other Services
+
+| Service | Why | Direction | What's Exchanged | If It's Down |
 |---|---|---|---|---|
-| [what can go wrong] | [how detected] | [system response] | [auto-recovery?] | [who's notified] |
+| [e.g., Account Service] | [e.g., Look up account details] | Inbound | [Account data] | [This service can't function] |
+| [e.g., Notification Service] | [e.g., Send error alerts] | Outbound | [Alert payload] | [Processing continues, alerts queued] |
 
-### 10. Integration Points
-| System/Service | Direction | Protocol | Format | Error Handling |
-|---|---|---|---|---|
-| [system] | [In/Out] | [REST/MQ/File] | [JSON/XML/Fixed] | [retry, fallback] |
+### 10. Performance Expectations
+- **Volume:** [N] accounts processed per run
+- **Time:** Must complete within [X] hours
+- **Concurrency:** [Can multiple instances run? Locking?]
+- **Safe to re-run:** [Yes/No — and why]
 
-### 11. Non-Functional
-- **Volume:** [N transactions/day]
-- **Performance:** [target response/throughput]
-- **Concurrency:** [locking needs]
-- **Idempotent:** [Y/N — safe to re-run?]
-- **Audit:** [what needs logging]
-
-### 12. Traceability
-| Business Rule | Spec Section | COBOL Source |
+### 11. Traceability
+| Business Policy | Spec Section | PM Story |
 |---|---|---|
-| BR-xxx | §N | [program, paragraph] |
+| BR-C-001 | §5.2, §7 | [DOMAIN]-001 |
+| BR-V-001 | §5.1, §6 | [DOMAIN]-001 |
 
-### 13. Open Items
-| Item | Type | Description | Impact if Wrong |
+### 12. Open Items
+| Item | Type | Description | What Breaks If Wrong |
 |---|---|---|---|
 | [item] | [ASSUMPTION / QUESTION / RISK] | [detail] | [consequence] |
 
@@ -144,222 +340,76 @@ Describe completely in structured English. Numbered steps. No COBOL terms.
 
 FILE 2: {{OUTPUT_DIR}}/03_functional/specs/api-specs/{{SERVICE_NAME}}.openapi.yaml
 
-If a service OpenAPI file already exists for this domain, APPEND to it.
-Otherwise create a new one.
-
-```yaml
-openapi: "3.1.0"
-info:
-  title: "[Service Name]"
-  version: "1.0.0"
-  description: "[Service description]"
-  x-cobol-source:
-    programs: ["list"]
-    cics_transactions: ["if applicable"]
-  x-human-doc: "03_functional/prose/{{PROGRAM_NAME}}_functional_spec.md"
-  x-service:
-    bounded_context: "[domain]"
-
-paths:
-  /[resource-path]:
-    [method]:
-      operationId: "[operationName]"
-      summary: "[description]"
-      x-cobol-source:
-        program: "{{PROGRAM_NAME}}"
-        source_path: "{{PROGRAM_PATH}}"
-        paragraph: "[paragraph]"
-        cics_transaction: "[if applicable]"
-      x-business-rules: ["BR-xxx list"]
-      x-human-doc:
-        spec: "FS-{{SPEC_ID}}"
-        section: "[section number]"
-      x-precision-critical:
-        - field: "[field name]"
-          calculation: "[formula]"
-          scale: [N]
-          rounding: "[mode]"
-      parameters: [...]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/[Schema]"
-      responses:
-        "200":
-          description: "[success]"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/[Response]"
-        "400":
-          description: "Validation failure"
-          x-business-rules: ["BR-V-xxx"]
-        "404":
-          description: "Not found"
-          x-cobol-source:
-            condition: "SQLCODE = +100 | FILE STATUS = '23' | RESP(NOTFND)"
-        "409":
-          description: "Conflict"
-          x-cobol-source:
-            condition: "SQLCODE = -803 | RESP(DUPRC)"
-        "422":
-          description: "Business rule violation"
-          x-business-rules: ["BR-xxx"]
-        "500":
-          description: "Internal error"
-
-components:
-  schemas:
-    [SchemaName]:
-      type: object
-      required: [list]
-      properties:
-        [field]:
-          $ref: "[domain-model-schema.yaml reference]"
-```
+[OpenAPI 3.1 spec — CAN contain x-cobol-source fields for traceability.
+Same format as previously defined. Reference domain model schemas from
+Pass 1 via $ref. Map COBOL error patterns to HTTP status codes.]
 ```
 
 ---
 
-## Prompt 3.2 — UI/Screen Mapping (CICS Online Programs Only)
+## Prompt 3.2 — Screen/UI Mapping (CICS Only)
 
 ```
-ROLE: You are a UI/UX analyst documenting legacy mainframe screens.
+ROLE: You are a UX analyst describing screens from the USER'S perspective.
+Describe what users SEE and DO — not BMS map field definitions.
 
-CONTEXT:
-- System: {{SYSTEM_NAME}}
-- Functional Spec: {{OUTPUT_DIR}}/03_functional/prose/{{PROGRAM_NAME}}_functional_spec.md
+BAD: "Field ACCTNO at row 5 col 10, PIC X(10), UNPROT BRT, MDT"
+GOOD: "Account Number — a text field where the user types the 10-character 
+account ID. The cursor starts here when the screen loads."
 
-TASK: Read the BMS map and COBOL program from the repository.
+Document every screen with: what the user sees, what they can type, 
+what each button/key does, where each action takes them, and what 
+error messages they might encounter.
 
-BMS Map: {{REPO_ROOT}}/{{BMS_PATH}}
-Program: {{REPO_ROOT}}/{{PROGRAM_PATH}}
-Copybooks: {{COPYBOOK_PATHS}}
-
-===== PRODUCE ONE FILE =====
-
-FILE: {{OUTPUT_DIR}}/03_functional/prose/{{TRANSACTION_ID}}_ui_mapping.md
-
-[Document every screen field, PF key action, navigation path, validation 
-trigger, and message. Include modern UI recommendations. Full template 
-same as Pass 3 Prompt 3.2 in the master guide.]
+Include a "Modern UI Recommendation" — how this should look as a web page.
 ```
 
 ---
 
-## Prompt 3.3 — Report Specification (Batch Report Programs Only)
+## Prompt 3.3 — Report Specification
 
 ```
-ROLE: You are a reporting analyst documenting legacy report specifications.
+ROLE: You are a reporting analyst describing reports from the READER'S 
+perspective. Describe what the report TELLS the reader and what 
+DECISIONS it supports — not the print layout mechanics.
 
-CONTEXT:
-- System: {{SYSTEM_NAME}}
-- Functional Spec: {{OUTPUT_DIR}}/03_functional/prose/{{PROGRAM_NAME}}_functional_spec.md
+BAD: "WRITE REPORT-LINE FROM DETAIL-LINE AFTER ADVANCING 1 LINE"
+GOOD: "Each row shows one loan account with its current balance, rate, 
+and accrued interest. Accounts are grouped by branch, with subtotals 
+showing each branch's total portfolio value."
 
-TASK: Read the report-generating program from the repository.
-
-Program: {{REPO_ROOT}}/{{PROGRAM_PATH}}
-Copybooks: {{COPYBOOK_PATHS}}
-
-===== PRODUCE ONE FILE =====
-
-FILE: {{OUTPUT_DIR}}/03_functional/prose/{{REPORT_NAME}}_report_spec.md
-
-[Document selection criteria, sort order, layout (headers, detail lines, 
-group breaks, totals), calculations, and modernization recommendation 
-(dashboard/API/PDF/eliminate). Full template same as master guide.]
+Include recommendation: dashboard, self-service query, scheduled email, 
+API, PDF, or eliminate entirely.
 ```
 
 ---
 
-## Prompt 3.4 — Interface & Integration Specification
+## Prompt 3.4 — Interface Specification
 
 ```
-ROLE: You are an integration architect documenting external interfaces.
+ROLE: You are an integration architect describing data exchanges in 
+business terms.
 
-CONTEXT:
-- System: {{SYSTEM_NAME}}
-- Functional Spec: {{OUTPUT_DIR}}/03_functional/prose/{{PROGRAM_NAME}}_functional_spec.md
+BAD: "Fixed-width file, LRECL=200, FB, with 15 fields starting at position 1"
+GOOD: "Every evening, the partner bank sends us a file containing the day's 
+payment transactions. Each record represents one payment, including the 
+account number, payment amount, payment date, and payment method."
 
-TASK: Read the program and JCL to document external interfaces.
-
-Program: {{REPO_ROOT}}/{{PROGRAM_PATH}}
-JCL: {{REPO_ROOT}}/{{JCL_PATH}}
-Copybooks: {{COPYBOOK_PATHS}}
-
-===== PRODUCE TWO FILES =====
-
-FILE 1: {{OUTPUT_DIR}}/03_functional/prose/{{INTERFACE_NAME}}_interface_spec.md
-
-[Document direction, protocol, format, record layout, validation, error 
-handling, volume, and modernization recommendation.]
-
----
-
-FILE 2: {{OUTPUT_DIR}}/03_functional/specs/interfaces/{{INTERFACE_NAME}}.interface.yaml
-
-```yaml
-interface:
-  id: "INT-[N]"
-  name: "[Interface Name]"
-  direction: "[INBOUND | OUTBOUND | BIDIRECTIONAL]"
-  external_system: "[name if known]"
-  x-cobol-source:
-    program: "{{PROGRAM_NAME}}"
-    source_path: "{{PROGRAM_PATH}}"
-    jcl_job: "[job name]"
-  x-human-doc: "03_functional/prose/{{INTERFACE_NAME}}_interface_spec.md"
-
-  current:
-    protocol: "[FILE_TRANSFER | MQ | CICS_LINK | DB2_SHARED]"
-    format: "[FIXED_WIDTH | DELIMITED | XML | JSON]"
-    encoding: "[EBCDIC | ASCII | UTF-8]"
-    record_length: [bytes]
-
-  proposed:
-    protocol: "[REST_API | EVENT_STREAM | BATCH_FILE | DATABASE]"
-    format: "[JSON | CSV | AVRO]"
-    rationale: "[why]"
-
-  record_layout:
-    - field: "[name]"
-      position: "[start-end]"
-      length: [N]
-      type: "[Alpha | Numeric | PackedDecimal]"
-      required: [true | false]
-      x-cobol-field: "[COBOL field name]"
-      x-domain-model-ref: "[schema.yaml#/properties/field]"
-
-  validation:
-    - check: "[what's validated]"
-      on_failure: "[REJECT_RECORD | REJECT_FILE | DEFAULT | LOG]"
-
-  volume:
-    typical: [N]
-    peak: [N]
-    processing_window: "[SLA]"
-```
-
-If async/event interactions are found, also produce:
-FILE 3: {{OUTPUT_DIR}}/03_functional/specs/events/{{DOMAIN}}-events.asyncapi.yaml
-(AsyncAPI 3.0 format — append if file exists)
+Include: what business process drives this exchange, what happens if 
+it doesn't arrive, and what the modern equivalent should be (API, event 
+stream, etc.)
 ```
 
 ---
 
 ## Quality Gate Checklist
 
-Before proceeding to Pass 4, verify:
-
-- [ ] Every program has a functional specification in `03_functional/prose/`
-- [ ] API specs exist for each proposed service in `03_functional/specs/api-specs/`
-- [ ] All OpenAPI specs are syntactically valid (test with openapi-generator validate)
-- [ ] All `$ref` references resolve to existing schemas
-- [ ] All `BR-xxx` references in `x-business-rules` exist in the rules YAML from Pass 2
-- [ ] All `x-cobol-source` references point to real files in the repo
-- [ ] CICS programs have UI mapping documents
-- [ ] Report programs have report specifications
-- [ ] External interfaces have interface specs
-- [ ] Processing log is updated
-- [ ] **TECHNICAL REVIEW CHECKPOINT:** COBOL developer validates 10-15% of functional specs against actual source code
+- [ ] **LANGUAGE CHECK:** No COBOL terms in prose. No COBOL-flavored pseudocode.
+- [ ] **PSEUDOCODE CHECK:** All pseudocode uses modern patterns (methods, objects, exceptions, repositories)
+- [ ] **FIELD NAME CHECK:** All field names are domain model names (camelCase), not COBOL names (WS-XXX)
+- [ ] Only PM-approved stories (KEEP/MODIFY/ENHANCE) have functional specs
+- [ ] Eliminated stories are not in scope
+- [ ] Modified stories incorporate PM notes
+- [ ] OpenAPI specs are syntactically valid
+- [ ] All $ref references resolve
+- [ ] **TECH REVIEW:** COBOL developer validates 10-15% against source

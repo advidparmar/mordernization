@@ -2,13 +2,71 @@
 
 ## Purpose
 
-Extract business-level meaning from the code. The audience is business analysts, product owners, and stakeholders who do NOT read COBOL. This pass also produces machine-readable workflow definitions and business rules with embedded test cases.
+Extract business-level meaning from the code. The audience is business analysts, product owners, and stakeholders who do NOT read COBOL.
+
+**CRITICAL WRITING PRINCIPLE:** The human-readable output from this pass must read as if it were written by a business analyst who interviewed subject matter experts — NOT by someone reading source code. If a business person can tell these specs were generated from COBOL, the output has failed.
+
+## The Business Language Standard
+
+### What Good Looks Like vs. What Bad Looks Like
+
+**BAD (COBOL-oriented):**
+> "In paragraph 3000-CALC-INTEREST, the program reads WS-CURR-BALANCE (PIC S9(7)V99 COMP-3) and WS-INT-RATE (PIC S9(3)V9(6)), then executes COMPUTE WS-DAILY-INT = WS-CURR-BALANCE * (WS-INT-RATE / 360) ROUNDED."
+
+**GOOD (Business-oriented):**
+> "Each business day, the system calculates interest for every active loan account. The daily interest charge equals the outstanding balance multiplied by the daily rate (the annual rate divided by 360 days — this uses the banking industry's '30/360' convention, not actual calendar days). The result is rounded to the nearest cent."
+
+### Banned Terms in Human-Readable Output
+
+These terms must NEVER appear in prose business documents:
+
+| BANNED Term | Use Instead |
+|-------------|------------|
+| paragraph, section (COBOL) | "processing step" or "business rule" |
+| WORKING-STORAGE, LINKAGE | "internal data" or "input parameters" |
+| copybook, COPY member | "shared data definition" or "standard record format" |
+| PIC, PICTURE clause | describe the business meaning (e.g., "dollar amount with two decimal places") |
+| COMP-3, packed decimal, zoned | "number" or "amount" |
+| FD, file description | "data source" or "input file" |
+| PERFORM, GO TO | describe what happens, not how control flows |
+| ABEND | "the system stops and flags an error" |
+| return code, RETURN-CODE | "the process reports success, warning, or failure" |
+| SQLCODE | "the database query succeeds or fails" |
+| FILE STATUS | "the file operation succeeds or fails" |
+| CICS, BMS, MAP | "the user screen" or "the interface" |
+| EXEC SQL, EXEC CICS | describe the business action ("retrieves the account") |
+| JCL, DD name, DSN | "scheduled job" or "input data" |
+| EBCDIC, binary | never mention encoding in business docs |
+| COMMAREA, TWA | "data passed between steps" |
+| cursor, FETCH | "the system retrieves records" |
+
+### Business Rule Writing Standard
+
+**BAD:** "BR-V-001: IF WS-ACCT-STATUS NOT = 'A' AND NOT = 'D', PERFORM 9000-ERROR-RTN."
+
+**GOOD:** "BR-V-001: Every account must have a valid status (Active or Dormant). If an account has any other status, the transaction is rejected with a notification to the operations team."
+
+### Calculation Writing Standard
+
+**BAD:** "COMPUTE WS-DAILY-INT = WS-CURR-BALANCE * (WS-INT-RATE / 360) ROUNDED"
+
+**GOOD:**
+> "Daily Interest = Outstanding Balance × (Annual Interest Rate ÷ 360)
+> Example: $50,000 at 5.5% = $50,000 × 0.055 ÷ 360 = **$7.64 per day**
+> Note: Uses the banking industry's 30/360 day-count convention."
+
+### Process Flow Writing Standard
+
+**BAD:** "1. Program opens input file LOAN-MASTER. 2. Program reads first record. 3. Program performs 2000-VALIDATE. 4. If FILE-STATUS = '00', performs 3000-CALCULATE."
+
+**GOOD:** "1. The system retrieves all active loan accounts scheduled for interest processing today. 2. For each account, it verifies the account is eligible (must be Active with a positive balance). 3. The system calculates the day's interest charge. 4. If any account fails validation, it is set aside for manual review without affecting other accounts."
+
+---
 
 ## Inputs Required
 
 - COBOL program source + copybooks (from repo)
 - Pass 1 outputs: inventory entries, domain model schemas, dependency graph, domain clusters
-- Programs should be processed by domain cluster (not individually) when possible
 
 ## Outputs Produced
 
@@ -20,20 +78,16 @@ Extract business-level meaning from the code. The audience is business analysts,
 
 ## Processing Instructions
 
-Process programs grouped by domain cluster from `00_repo_scan/program_tiers.yaml`:
+Process programs grouped by domain cluster:
 
 ```
 1. For each domain cluster:
-   a. READ all programs in the cluster from the repository
-   b. READ all their copybooks
-   c. LOAD their Pass 1 inventory entries as context
-   d. APPLY Prompt 2.1 (Business Process + Workflow + Rules)
-   e. WRITE outputs to the appropriate directories
+   a. READ all programs + copybooks
+   b. LOAD Pass 1 inventory entries as context
+   c. APPLY Prompt 2.1
+   d. WRITE outputs
 
-2. After all domains are processed:
-   a. APPLY Prompt 2.2 (Business Rules Aggregation)
-   b. WRITE the master catalog
-
+2. After all domains: APPLY Prompt 2.2 (aggregation)
 3. UPDATE the processing log
 ```
 
@@ -41,324 +95,150 @@ Process programs grouped by domain cluster from `00_repo_scan/program_tiers.yaml
 
 ## Prompt 2.1 — Business Process, Workflow & Rules
 
-For each domain cluster, produce dual-format business documentation.
-
 ```
-ROLE: You are BOTH a senior business analyst (writing for a business 
-audience — no technical jargon) AND a workflow architect (producing 
-machine-readable state machines and rules).
+ROLE: You are a senior business analyst who just spent two weeks 
+interviewing subject matter experts. You are writing up your findings.
+You have NEVER seen the source code. You describe business processes 
+the way a management consultant would — in terms of business outcomes, 
+decisions, policies, and customer impact.
+
+You also produce machine-readable workflow and rules YAML (these CAN 
+reference COBOL source for traceability, but the human docs MUST NOT).
+
+CRITICAL RULES FOR HUMAN-READABLE OUTPUT:
+1. NEVER use any COBOL terminology (see Banned Terms list)
+2. NEVER reference program names, paragraph names, or line numbers
+3. NEVER describe processing in terms of file reads/writes
+4. NEVER say "the program does X" — describe the business action
+5. Write as if you learned this from interviewing business people
+6. Every calculation must include a worked example with real numbers
+7. Every rule must be understandable by a non-technical person
+8. Describe error handling as what the USER experiences, not code behavior
 
 CONTEXT:
 - System: {{SYSTEM_NAME}}
 - Domain: {{DOMAIN_CONTEXT}}
 - Domain Cluster: {{CLUSTER_NAME}}
-- Programs in this cluster: {{PROGRAM_LIST}}
 
-PRIOR CONTEXT (read these files for context):
-- Inventory entries: {{OUTPUT_DIR}}/01_discovery/specs/inventory/{{PROGRAM_NAME}}.inventory.yaml
-  (for each program in the cluster)
-- Domain models: {{OUTPUT_DIR}}/01_discovery/specs/domain-model/*.schema.yaml
-  (relevant schemas)
-- Dependency graph: {{OUTPUT_DIR}}/01_discovery/specs/dependency_graph.yaml
+PRIOR CONTEXT:
+- Inventory: {{OUTPUT_DIR}}/01_discovery/specs/inventory/
+- Domain models: {{OUTPUT_DIR}}/01_discovery/specs/domain-model/
 
-TASK: Read ALL programs in this domain cluster from the repository.
-Analyze them TOGETHER to extract the complete business process, all 
-business rules, and the workflow definition.
-
-Programs to read:
-{{PROGRAM_PATHS}}  (list of file paths in repo)
-
-Copybooks to read:
-{{COPYBOOK_PATHS}}  (all copybooks used by these programs)
+Programs to read: {{PROGRAM_PATHS}}
+Copybooks to read: {{COPYBOOK_PATHS}}
 
 ===== PRODUCE THREE FILES =====
 
 FILE 1: {{OUTPUT_DIR}}/02_business/prose/{{CLUSTER_NAME}}_business_process.md
 
-## Business Process: [Business-Friendly Process Name]
+## [Business Process Name — NOT the COBOL program name]
 
-### Business Objective
-[2-3 sentences for an executive. What business goal? Why does it exist?]
+### Why This Process Exists
+[2-3 sentences for an executive. What business need? What if it stopped?]
 
-### Business Context
-[Where this fits in the larger business. What's upstream? Downstream? 
-What breaks if this stops running?]
+### Where This Fits in the Business
+[Value chain context. What's upstream? Downstream? Who's involved?]
 
-### Actors & Stakeholders
-| Who | Role in Process | What They Care About |
+### Who's Involved
+| Role | What They Do | What They Need From This Process |
 |---|---|---|
-| [actor] | [role] | [interest] |
+| [business role] | [responsibility] | [outcome they depend on] |
 
-### End-to-End Process Flow
-[Tell the story as a narrative. Plain English. Numbered steps.]
+### How It Works
 
-1. [First business step — e.g., "Each business day, the system reviews 
-   all active loan accounts due for interest calculation."]
-2. [Next step]
-3. [Continue for ALL steps across ALL programs in this cluster]
+[Tell the story as a narrative. Every step describes a BUSINESS ACTION 
+and its BUSINESS PURPOSE.]
 
-### Business Rules
+**Step 1: [Business action name]**
+[What happens, why, business outcome, decisions made at this step.]
 
-| Rule ID | Plain English Description | Category | Source Program | Confidence | SME Question |
-|---|---|---|---|---|---|
-| BR-V-001 | [description a business person can validate] | Validation | [program] | HIGH | None |
-| BR-C-001 | [description] | Calculation | [program] | HIGH | [question] |
-| BR-T-001 | [description with specific values] | Threshold | [program] | MEDIUM | "Are the $100 threshold and $25 fee still current?" |
+**Step 2: [Next action]**
+[Continue. Decision points described as business decisions, not IF 
+statements: "If the account is dormant, interest accrual pauses 
+because dormant accounts are not actively serviced."]
 
-### Business Calculations
-| Calc ID | What It Calculates | Formula | Worked Example | Convention |
+[Continue for all steps...]
+
+### Business Policies & Rules
+
+#### Eligibility Policies
+| Policy ID | Policy | Rationale | Review Needed? |
+|---|---|---|---|
+| BR-E-001 | [business policy statement] | [why] | [Yes/No + question] |
+
+#### Calculation Policies
+| Policy ID | What's Calculated | Formula | Worked Example | Convention |
 |---|---|---|---|---|
-| BR-C-001 | Daily interest | Balance × (Rate ÷ 360) | $50,000 × (5.5% ÷ 360) = $7.64 | 360-day year |
+| BR-C-001 | [description] | [plain math] | [$50K at 5.5% = $7.64/day] | [30/360 etc.] |
 
-### Exception Handling (Business View)
-| What Goes Wrong | Business Response | Impact |
+#### Validation Policies
+| Policy ID | What's Checked | If It Fails | Who's Notified |
+|---|---|---|---|
+| BR-V-001 | [plain English] | [business response] | [business role] |
+
+#### Threshold Policies
+| Policy ID | Policy | Current Value | Needs PM Review? |
+|---|---|---|---|
+| BR-T-001 | [policy] | [value] | [YES — may be outdated] |
+
+### What Can Go Wrong
+| Scenario | Business Impact | How It's Handled |
 |---|---|---|
-| [scenario] | [what happens] | [business consequence] |
+| [described from user perspective] | [business consequence] | [business response] |
 
 ### Reports & Outputs
-| Output | Audience | Contents | Frequency |
+| Output | Who Reads It | What It Tells Them | Still Needed? |
 |---|---|---|---|
-| [name] | [who] | [what] | [when] |
+| [name] | [role] | [business value] | [PM should confirm] |
 
-### Compliance & Regulatory Notes
-[Flag anything regulatory — be specific about which rules]
-
-### Open Questions for Business SME Review
-[Specific questions — not vague. Each should be answerable by a 
-knowledgeable business person.]
+### Questions for Business Review
+1. **[Specific question]** — [Full context and why it matters]
+2. [Continue...]
 
 ---
 
 FILE 2: {{OUTPUT_DIR}}/02_business/specs/workflows/{{PROCESS_NAME}}.workflow.yaml
-
-```yaml
-workflow:
-  id: "WF-{{PROCESS_ID}}"
-  version: "1.0.0"
-  name: "[Business process name]"
-  description: "[Business description]"
-  x-cobol-source:
-    programs: ["list of all programs in this cluster"]
-    jcl_jobs: ["associated JCL jobs"]
-    source_paths:
-      - program: "[name]"
-        path: "[path in repo]"
-  x-human-doc: "02_business/prose/{{CLUSTER_NAME}}_business_process.md"
-
-  trigger:
-    type: "[SCHEDULED | EVENT | USER_ACTION | UPSTREAM_PROCESS]"
-    schedule: "[cron or description]"
-    event: "[event name if triggered]"
-
-  states:
-    [STATE_NAME]:
-      description: "[business meaning]"
-      x-cobol-source:
-        program: "[program name]"
-        paragraph: "[section/paragraph]"
-      on_entry:
-        - action: "[action name]"
-          rules: ["BR-xxx"]
-      on_exit:
-        - action: "[action name]"
-      scheduled_actions:
-        - action: "[action name]"
-          schedule: "[daily | weekly | monthly | on-demand]"
-          rules: ["BR-xxx"]
-          x-cobol-source:
-            program: "[program]"
-            jcl_job: "[job name]"
-      transitions:
-        - event: "[EVENT_NAME]"
-          target: "[TARGET_STATE]"
-          guard:
-            rules: ["BR-xxx"]
-            condition: "[human-readable condition]"
-          action: "[action during transition]"
-          x-cobol-source:
-            program: "[program]"
-            paragraph: "[where transition logic is]"
-```
-
----
+[Machine-readable — CAN contain x-cobol-source references. Same YAML format as before.]
 
 FILE 3: {{OUTPUT_DIR}}/02_business/specs/rules/{{DOMAIN}}/{{CLUSTER_NAME}}.rules.yaml
-
-```yaml
-rule_set:
-  id: "RS-{{CLUSTER_ID}}"
-  version: "1.0.0"
-  domain: "{{DOMAIN}}"
-  description: "[What rules this set covers]"
-  x-cobol-source:
-    programs: ["list"]
-  x-human-doc: "02_business/prose/{{CLUSTER_NAME}}_business_process.md"
-
-rules:
-  - id: "BR-[V|C|E|T|R|S]-[number]"
-    name: "[Human-readable name]"
-    category: "[VALIDATION | CALCULATION | ELIGIBILITY | THRESHOLD | STATE_TRANSITION | ROUTING]"
-    priority: [1-10, 1=highest]
-    description: "[Plain English — same as in human doc]"
-    x-cobol-source:
-      program: "[program name]"
-      source_path: "[path in repo]"
-      paragraph: "[paragraph/section]"
-      line_range: "[approximate lines]"
-    x-human-doc:
-      file: "02_business/prose/{{CLUSTER_NAME}}_business_process.md"
-      section: "Business Rules"
-    condition:
-      all:  # or any:
-        - field: "[field from domain model schema]"
-          operator: "[equals | not_equals | greater_than | less_than | in | not_in | is_null | is_blank | matches | not_matches | between]"
-          value: "[value]"
-    action:
-      type: "[validate | calculate | reject | skip | apply_fee | route | transform]"
-      # For reject/validate:
-      error_code: "[ERR-xxx]"
-      error_message: "[message]"
-      http_status: [code]
-      # For calculate:
-      formula: "[mathematical formula]"
-      target_field: "[output field]"
-      precision:
-        scale: [decimal places]
-        rounding_mode: "[HALF_UP | HALF_DOWN | TRUNCATE | CEILING | FLOOR]"
-        day_count_convention: "[30/360 | actual/365 | actual/actual]"
-      # For apply_fee:
-      fee_amount: "[amount]"
-      fee_code: "[code]"
-    test_cases:
-      - description: "[happy path]"
-        input: { field1: "value1", field2: "value2" }
-        expected: { result_field: "expected_value" }
-      - description: "[boundary case]"
-        input: { field1: "boundary_value" }
-        expected: { result_field: "expected_value" }
-      - description: "[negative case]"
-        input: { field1: "invalid_value" }
-        expected: { valid: false, error_code: "ERR-xxx" }
-    x-sme-review:
-      needed: [true | false]
-      question: "[specific question]"
-      confidence: "[HIGH | MEDIUM | LOW]"
-```
+[Machine-readable — CAN contain x-cobol-source. Same YAML format with conditions, actions, test cases.]
 ```
 
 ---
 
 ## Prompt 2.2 — Business Rules Aggregation
 
-After ALL domain clusters have been processed, run this aggregation.
-
 ```
-ROLE: You are a senior business analyst consolidating business rules 
-across the entire system into a master catalog.
+ROLE: You are consolidating business policies across the organization.
+Write the catalog as a POLICY REFERENCE DOCUMENT for business reviewers.
+Use the same business language standard — no technical terms.
 
-CONTEXT:
-- System: {{SYSTEM_NAME}}
-
-TASK: Read ALL rules YAML files from:
-{{OUTPUT_DIR}}/02_business/specs/rules/
-
-Consolidate into a single deduplicated, categorized catalog. Identify 
-rules in multiple programs, flag contradictions, group related rules.
-
-===== PRODUCE TWO FILES =====
+TASK: Read ALL rules YAML from {{OUTPUT_DIR}}/02_business/specs/rules/
+Produce master catalog organized by BUSINESS CATEGORY, not by program.
 
 FILE 1: {{OUTPUT_DIR}}/02_business/prose/MASTER_BUSINESS_RULES_CATALOG.md
 
-## Master Business Rules Catalog — {{SYSTEM_NAME}}
+## Business Policy Catalog — {{SYSTEM_NAME}}
 
-### Summary
-- Total Unique Rules: [N]
-- By Category: Validation: [N], Calculation: [N], Eligibility: [N], 
-  Threshold: [N], State Transition: [N], Routing: [N]
-- Rules in Multiple Programs: [N]
-- Potential Contradictions: [N]
-- Rules Needing SME Validation: [N]
+### How to Read This Document
+This lists every business policy enforced by the system. Organized by 
+business function. Your job: confirm each is still correct.
 
-### Rules by Category
-
-#### Validation Rules
-| ID | Description | Programs | Priority | Confidence |
-|---|---|---|---|---|
-| BR-V-001 | [description] | [programs] | [priority] | [confidence] |
-
-[Repeat for each category...]
-
-### Cross-Program Duplicates
-| Rule ID | Found In | Implementations Consistent? | Notes |
-|---|---|---|---|
-| [ID] | [programs] | [YES / NO / PARTIAL] | [differences] |
-
-### Contradictions Found
-| Rule A | Rule B | Programs | Conflict Description |
-|---|---|---|---|
-| [ID] | [ID] | [programs] | [nature of contradiction] |
-
-### Rules Requiring SME Validation
-| Rule ID | Question for SME | Why Uncertain |
-|---|---|---|
-| [ID] | [specific question] | [reason] |
-
----
+[Organize by: Eligibility, Calculations, Validations, Thresholds, Workflow]
+[Flag inconsistencies where the same rule is implemented differently]
+[Include specific questions for business reviewers]
 
 FILE 2: {{OUTPUT_DIR}}/02_business/specs/rules/master_rules_catalog.yaml
-
-```yaml
-master_catalog:
-  system: "{{SYSTEM_NAME}}"
-  generated_date: "[date]"
-  
-  summary:
-    total_unique_rules: [N]
-    by_category:
-      validation: [N]
-      calculation: [N]
-      eligibility: [N]
-      threshold: [N]
-      state_transition: [N]
-      routing: [N]
-    cross_program_rules: [N]
-    contradictions: [N]
-    needing_sme_review: [N]
-
-  all_rules:
-    - id: "BR-xxx"
-      name: "[name]"
-      category: "[category]"
-      description: "[description]"
-      found_in_programs: ["program1", "program2"]
-      source_rule_files: ["path1.rules.yaml", "path2.rules.yaml"]
-      consistent_across_programs: [true | false]
-      inconsistency_notes: "[if inconsistent, describe difference]"
-      sme_review_needed: [true | false]
-      sme_question: "[question]"
-
-  contradictions:
-    - rule_a: "BR-xxx"
-      rule_b: "BR-yyy"
-      programs: ["prog1", "prog2"]
-      description: "[conflict]"
-      resolution: "[PENDING_SME | RESOLVED | ACCEPTED]"
-```
 ```
 
 ---
 
 ## Quality Gate Checklist
 
-Before proceeding to Pass 3, verify:
-
-- [ ] Every domain cluster has a business process document
-- [ ] Every domain has a workflow YAML
-- [ ] Every domain has a rules YAML
-- [ ] Business rule IDs are unique across the entire system (no duplicates)
-- [ ] Every rule has at least 3 test cases (happy, boundary, negative)
-- [ ] Master rules catalog is generated with cross-program analysis
-- [ ] Contradictions are flagged for SME review
-- [ ] All YAML files are syntactically valid
-- [ ] Processing log is updated
-- [ ] **SME REVIEW CHECKPOINT:** Business SMEs should validate 15-20% of business process documents before proceeding
+- [ ] **LANGUAGE CHECK:** Read every prose doc aloud. If ANY COBOL term appears, rewrite.
+- [ ] Every calculation has a worked example with realistic dollar amounts
+- [ ] Rules are written as business policies, not code translations
+- [ ] Inconsistencies across the system are flagged
+- [ ] Questions for business review are specific and answerable
+- [ ] Machine-readable specs are valid YAML
+- [ ] **SME REVIEW:** Business SMEs validate 15-20% of documents
